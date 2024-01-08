@@ -1,1 +1,3 @@
-# my_assistant_bot
+нужно сделать полное описание проетка
+
+# OUR_PROJECT
