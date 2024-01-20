@@ -2,7 +2,10 @@ from pathlib import Path
 import shutil
 from tqdm import tqdm
 import time
+from time import sleep, ctime
 import re
+from threading import Thread, Barrier
+import logging
 
 # normalize
 # Створюємо змінну з українською абеткою
@@ -32,6 +35,7 @@ JPEG_IMAGES = []
 JPG_IMAGES = []
 PNG_IMAGES = []
 SVG_IMAGES = []
+GIF_IMAGES = []
 
 # Створюємо порожні списки для відео
 AVI_VIDEO = []
@@ -61,27 +65,28 @@ MY_OTHER = []
 
 # Створюємо словник з розширеннями та відповідними ним списками
 REGISTER_EXTENSION = {
-    'JPEG': JPEG_IMAGES,
-    'JPG': JPG_IMAGES,
-    'PNG': PNG_IMAGES,
-    'SVG': SVG_IMAGES,
-    'AVI': AVI_VIDEO,
-    'MP4': MP4_VIDEO,
-    'MOV': MOV_VIDEO,
-    'MKV': MKV_VIDEO,
-    'MP3': MP3_AUDIO,
-    'OGG': OGG_AUDIO,
-    'WAW': WAV_AUDIO,
-    'AMR': AMR_AUDIO,
-    'DOC': DOC_DOCUMENTS,
-    'DOCX': DOCX_DOCUMENTS,
-    'TXT': TXT_DOCUMENTS,
-    'PDF': PDF_DOCUMENTS,
-    'XLSX': XLSX_DOCUMENTS,
-    'PPTX': PPTX_DOCUMENTS,
-    'ZIP': ARCHIVES,
-    'GZ': ARCHIVES,
-    'TAR': ARCHIVES,
+    'JPEG': [JPEG_IMAGES, 'images'],
+    'JPG': [JPG_IMAGES, 'images'],
+    'PNG': [PNG_IMAGES, 'images'],
+    'GIF': [GIF_IMAGES, 'images'],
+    'SVG': [SVG_IMAGES, 'images'],
+    'AVI': [AVI_VIDEO, 'video'],
+    'MP4': [MP4_VIDEO, 'video'],
+    'MOV': [MOV_VIDEO, 'video'],
+    'MKV': [MKV_VIDEO, 'video'],
+    'MP3': [MP3_AUDIO, 'audio'],
+    'OGG': [OGG_AUDIO, 'audio'],
+    'WAW': [WAV_AUDIO, 'audio'],
+    'AMR': [AMR_AUDIO, 'audio'],
+    'DOC': [DOC_DOCUMENTS, 'documents'],
+    'DOCX': [DOCX_DOCUMENTS, 'documents'],
+    'TXT': [TXT_DOCUMENTS, 'documents'],
+    'PDF': [PDF_DOCUMENTS, 'documents'],
+    'XLSX': [XLSX_DOCUMENTS, 'documents'],
+    'PPTX': [PPTX_DOCUMENTS, 'documents'],
+    'ZIP': [ARCHIVES, 'archives'],
+    'GZ': [ARCHIVES, 'archives'],
+    'TAR': [ARCHIVES, 'archives'],
 }
 
 # Створюємо порожній список для шляху до папок
@@ -114,7 +119,7 @@ def scan(folder: Path):
             MY_OTHER.append(full_name)
         else:
             try:  # перевіряємо з розширень
-                register_extension = REGISTER_EXTENSION[extension]
+                register_extension = REGISTER_EXTENSION[extension][0]
                 register_extension.append(full_name)
                 EXTENSIONS.add(extension)
             except KeyError:
@@ -142,178 +147,55 @@ def handle_archive(file_name: Path, target_folder: Path):
     file_name.unlink()
 
 
+def process_files(file_list, target_folder, file_type):
+    for file in tqdm(file_list, desc=f'\033[38;2;10;235;190mProcessing {file_type}',
+                     unit=" file\033[0m", ncols=100):
+        handle_media(file, target_folder)
+        time.sleep(0.05)
+
+
+def process_archives(archive_list, target_folder):
+    for file in tqdm(archive_list, desc='\033[38;2;10;235;190mProcessing of archives',
+                     unit=" file\033[0m", ncols=100):
+        handle_archive(file, target_folder)
+        time.sleep(0.05)
+
+
+def process_folders(folder_list):
+    for folder in tqdm(folder_list[::-1], desc='\033[38;2;10;235;190mDeleting empty folders',
+                       unit=" folder\033[0m", ncols=100):
+        time.sleep(0.05)
+        try:
+            folder.rmdir()
+        except OSError:
+            print(f'\033[91mError during remove folder {folder}\033[0m')
+
+
 # Основний модуль логіки
 def main(folder: Path):
+    logging.basicConfig(level = logging.DEBUG, format = '%(threadName)s %(message)s')
+    logging.debug(f'Start program {ctime()}')
     scan(folder)
-    # Проходимо по всіх знайдених списках для images
-    # count_star  =0
-    # count_stop = len(JPEG_IMAGES)
-    # items = list(range(count_stop))
-    # for file in JPEG_IMAGES:
-    #     handle_media(file, folder / 'images' / 'JPEG')
 
-    count_star = 0
-    for file in tqdm(JPEG_IMAGES, desc = '\033[38;2;10;235;190mImage processing JPEG',
-                     unit = " file\033[0m", ncols = 100):
-        handle_media(file, folder / 'images' / 'JPEG')
-        count_star += 1
-        time.sleep(0.05)
+    threads = []
+    for key, value in REGISTER_EXTENSION.items():
+        if value[1] not in ['archives']:
 
-    count_star = 0
-    for file in tqdm(JPG_IMAGES, desc = '\033[38;2;10;235;190mImage processing JPG',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in JPG_IMAGES:
-        handle_media(file, folder / 'images' / 'JPG')
-        count_star += 1
-        time.sleep(0.05)
+            logging.debug(f'Start sorter {key} {ctime()}')
+            thread = Thread(target = process_files, args = (value[0], folder / value[1] / key, key,))
+            thread.start()
+            threads.append(thread)
+            # process_files(value[0], folder / value[1] / key, key)
 
-    count_star = 0
-    for file in tqdm(PNG_IMAGES, desc = '\033[38;2;10;235;190mImage processing PNG',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in PNG_IMAGES:
-        handle_media(file, folder / 'images' / 'PNG')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(SVG_IMAGES, desc = '\033[38;2;10;235;190mImage processing SVG',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in SVG_IMAGES:
-        handle_media(file, folder / 'images' / 'SVG')
-        count_star += 1
-        time.sleep(0.05)
-
-    # Проходимо по всіх знайдених списках для відео
-    count_star = 0
-    for file in tqdm(AVI_VIDEO, desc = '\033[38;2;10;235;190mVideo processing AVI',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in AVI_VIDEO:
-        handle_media(file, folder / 'video' / 'AVI_VIDEO')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(MP4_VIDEO, desc = '\033[38;2;10;235;190mVideo processing MP4',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in MP4_VIDEO:
-        handle_media(file, folder / 'video' / 'MP4_VIDEO')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(MOV_VIDEO, desc = '\033[38;2;10;235;190mVideo processing MOV',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in MOV_VIDEO:
-        handle_media(file, folder / 'video' / 'MOV_VIDEO')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(MKV_VIDEO, desc = '\033[38;2;10;235;190mVideo processing MKV',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in MKV_VIDEO:
-        handle_media(file, folder / 'video' / 'MKV_VIDEO')
-        count_star += 1
-        time.sleep(0.05)
-
-    # Проходимо за всіма знайденими списками для audio
-    count_star = 0
-    for file in tqdm(MP3_AUDIO, desc = '\033[38;2;10;235;190mAudio processing MP3',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in MP3_AUDIO:
-        handle_media(file, folder / 'audio' / 'MP3_AUDIO')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(OGG_AUDIO, desc = '\033[38;2;10;235;190mAudio processing OGG',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in OGG_AUDIO:
-        handle_media(file, folder / 'audio' / 'OGG_AUDIO')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(WAV_AUDIO, desc = '\033[38;2;10;235;190mAudio processing WAV',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in WAV_AUDIO :
-        handle_media(file, folder / 'audio' / 'WAV_AUDIO')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(AMR_AUDIO, desc = '\033[38;2;10;235;190mAudio processing AMR',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in AMR_AUDIO :
-        handle_media(file, folder / 'audio' / 'AMR_AUDIO')
-        count_star += 1
-        time.sleep(0.05)
-
-    # Проходимо по всіх знайдених списках для documents
-    count_star = 0
-    for file in tqdm(DOC_DOCUMENTS, desc = '\033[38;2;10;235;190mProcessing of documents DOC',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in DOC_DOCUMENTS:
-        handle_media(file, folder / 'documents' / 'DOC_DOCUMENTS')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(DOCX_DOCUMENTS, desc = '\033[38;2;10;235;190mProcessing of documents DOCX',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in DOCX_DOCUMENTS:
-        handle_media(file, folder / 'documents' / 'DOCX_DOCUMENTS')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(TXT_DOCUMENTS, desc = '\033[38;2;10;235;190mProcessing of documents TXT',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in TXT_DOCUMENTS:
-        handle_media(file, folder / 'documents' / 'TXT_DOCUMENTS')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(PDF_DOCUMENTS, desc = '\033[38;2;10;235;190mProcessing of documents PDF',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in PDF_DOCUMENTS:
-        handle_media(file, folder / 'documents' / 'PDF_DOCUMENTS')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(XLSX_DOCUMENTS, desc = '\033[38;2;10;235;190mProcessing of documents XLSX',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in XLSX_DOCUMENTS:
-        handle_media(file, folder / 'documents' / 'XLSX_DOCUMENTS')
-        count_star += 1
-        time.sleep(0.05)
-
-    count_star = 0
-    for file in tqdm(PPTX_DOCUMENTS, desc = '\033[38;2;10;235;190mProcessing of documents PPTX',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in PPTX_DOCUMENTS:
-        handle_media(file, folder / 'documents' / 'PPTX_DOCUMENTS')
-        count_star += 1
-        time.sleep(0.05)
-
+    [el.join() for el in threads]
+    logging.debug(f'Start sorter archives {ctime()}')
+    process_archives(ARCHIVES, folder / 'archives')
 
     # Проходимо за всіма знайденими списками для MY_OTHER
     count_star = 0
     for file in tqdm(MY_OTHER, desc = '\033[38;2;10;235;190mProcessing other files',
                      unit = " file\033[0m", ncols = 100):
-    # for file in MY_OTHER:
         handle_media(file, folder / 'MY_OTHER')
-        count_star += 1
-        time.sleep(0.05)
-
-    # Проходимо по всіх знайдених списках для ARCHIVES
-    count_star = 0
-    for file in tqdm(ARCHIVES, desc = '\033[38;2;10;235;190mProcessing of archives',
-                     unit = " file\033[0m", ncols = 100):
-    # for file in ARCHIVES:
-        handle_archive(file, folder / 'ARCHIVES')
         count_star += 1
         time.sleep(0.05)
 
@@ -322,9 +204,6 @@ def main(folder: Path):
                      unit = " file\033[0m", ncols = 100):
         count_star += 1
         time.sleep(0.05)
-    # for folder in FOLDERS[::-1]:
-
-
         # Видаляємо пусті папки після сортування
         try:
             folder.rmdir()
@@ -337,9 +216,9 @@ def sorteds_menu():
           f' \033[91mtrash_folder'
           f'\033[38;2;10;235;190m in this project and press Enter to sort them.\033[0m')
     user_input = input('\033[38;2;10;235;190mPress Enter to sort them.\033[0m')
-
     folder_process = Path('trash_folder')
     main(folder_process.resolve())
+
 
 if __name__ == "__main__":
     # items = list(range(100))
